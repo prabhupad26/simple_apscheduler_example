@@ -1,16 +1,18 @@
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import asyncio
 import time
 from datetime import datetime
 import requests
 from fake_useragent import UserAgent
 import json
+import pywhatkit
 
 get_slots_url = f"https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByPin"
 uagent = UserAgent()
 browser_header = {'User-Agent': uagent.random}
 
 
-def scheduled_method():
+async def scheduled_method():
     print("Starting HTTP call...")
     response = requests.get(get_slots_url,
                             headers=browser_header,
@@ -22,12 +24,23 @@ def scheduled_method():
             if session.get('min_age_limit') == 18:
                 if session.get('available_capacity_dose1') != 0:
                     print(f"Available : {session.get('slots')}")
+                    message = f"{session.get('vaccine')} is available, " \
+                              f"Available dose : {session.get('available_capacity_dose1')}, " \
+                              f"Available Place : {center.get('name')}, " \
+                              f"Address : {center.get('address')}"
+                    print(message)
+                    pywhatkit.sendwhatmsg("you contact number with country code", message,
+                                          time_hour=int(datetime.now().strftime('%H')),
+                                          time_min=int(datetime.now().strftime('%M')) + 1,
+                                          wait_time=0)
+    print("Ending HTTP call")
 
 
-scheduler = BackgroundScheduler()
-kwargs = {'minutes': 30}
-scheduler.add_job(scheduled_method, 'interval', id='schedule_method', **kwargs)
+scheduler = AsyncIOScheduler()
+scheduler.add_job(scheduled_method, 'interval', minutes=10)
 scheduler.start()
-for i in range(60):
-    time.sleep(1)
-scheduler.shutdown()
+print("System interrupt to halt execution")
+try:
+    asyncio.get_event_loop().run_forever()
+except (KeyboardInterrupt, SystemExit):
+    pass
